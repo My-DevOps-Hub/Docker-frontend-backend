@@ -1,0 +1,29 @@
+FROM gradle:7-jdk11 AS build
+
+COPY --chown=gradle:gradle . /home/gradle/src
+
+WORKDIR /home/gradle/src
+
+# Omitted test task as there were no unit tests were added on the project
+# And test task was failing if it is executed
+# If added please remove this line
+# https://stackoverflow.com/a/4714118/7135309
+RUN gradle build --no-daemon -x test
+RUN ls /home/gradle/src/build/libs/
+FROM amazoncorretto:11-alpine3.15
+RUN mkdir -p /newrelic
+COPY ./newrelic/newrelic.jar /newrelic/newrelic.jar
+COPY ./newrelic/newrelic.yml /newrelic/newrelic.yml
+ENV NEW_RELIC_APP_NAME="mp-pos-service"
+ENV NEW_RELIC_LICENSE_KEY="0d826816568103edaafc27ef76a9642924efNRAL"
+ENV NEW_RELIC_LOG_FILE_NAME=STDOUT
+EXPOSE 8080
+
+RUN mkdir /app
+
+ARG SPRING_PROFILES_ACTIVE
+ENV SPRING_PROFILES_ACTIVE=$SPRING_PROFILES_ACTIVE
+
+COPY --from=build /home/gradle/src/build/libs/mosaic-pos-service-0.0.1.jar /app/spring-boot-application.jar
+
+ENTRYPOINT ["java", "-javaagent:/newrelic/newrelic.jar", "-jar", "/app/spring-boot-application.jar"]
